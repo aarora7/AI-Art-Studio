@@ -1,0 +1,8 @@
+{
+"name": "ai-art-studio",
+"version": "1.0.0",
+"description": "Root package file for Netlify deployment.",
+"scripts": {
+"build": "echo 'No build command required for static site'"
+}
+}
