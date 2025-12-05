@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Art Studio: Critic, Prompt, & Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Set Firebase log level for debugging
+        setLogLevel('error'); 
+        
+        // --- GLOBAL VARIABLES (Provided by Canvas Environment) ---
+        // Note: These variables must be used for secure Firebase initialization.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let auth, userId = null;
+
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            
+            // Function to handle Firebase Authentication
+            const initializeAuth = async () => {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    userId = auth.currentUser?.uid || crypto.randomUUID();
+                    console.log("Firebase Auth Initialized. User ID:", userId);
+                    document.querySelectorAll('.user-id').forEach(el => el.textContent = userId);
+                } catch (error) {
+                    console.error("Firebase authentication error:", error);
+                }
+            };
+            initializeAuth();
+        }
+
+        /**
+         * Converts a File object to a Base64 string for the Gemini API.
+         * @param {File} file The file object to convert.
+         * @returns {Promise<string>} The Base64 data string.
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    // Extract only the Base64 data part (after the comma)
+                    const base64Data = reader.result.split(',')[1];
+                    resolve(base64Data);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /**
+         * Displays a temporary notification message on the screen.
+         * @param {string} message The message to display.
+         * @param {string} type Tailwind classes for color (e.g., 'bg-red-500').
+         */
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 ${type}`;
+            setTimeout(() => {
+                notification.className = 'p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 opacity-0 transform translate-y-[-10px]';
+            }, 5000);
+        }
+
+        // Simple Markdown parser for displaying the result nicely
+        const marked = {
+            parse: (markdown) => {
+                let html = markdown
+                    .replace(/^### (.*$)/gim, '<h3 class="text-xl font-bold mt-4 mb-2 text-indigo-600">$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-gray-800">$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-extrabold mt-8 mb-4 text-indigo-700">$1</h1>')
+                    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*)\*\*/gim, '<em>$1</em>')
+                    .replace(/^- (.*$)/gim, '<li>$1</li>')
+                    .replace(/\n\n/gim, '<p class="mt-2 mb-2">')
+                    .replace(/\n/gim, '<br>');
+                
+                // Final cleanup for list items (simple approach)
+                html = html.replace(/<li>.*<\/li>/s, (match) => `<ul class="list-disc list-inside ml-4 space-y-1">${match}</ul>`);
+                return html;
+            }
+        };
+
+        // Function to display image previews
+        function handleFileSelect(event, previewId, labelId) {
+            const file = event.target.files[0];
+            const preview = document.getElementById(previewId);
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    document.getElementById(labelId).textContent = file.name;
+                }
+                reader.readAsDataURL(file);
+            } else {
+                preview.src = '';
+                preview.classList.add('hidden');
+                document.getElementById(labelId).textContent = 'Choose File';
+            }
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        /**
+         * Calls the local Netlify Function endpoint to
