@@ -1,8 +1,11 @@
 {
 "name": "ai-art-studio",
 "version": "1.0.0",
-"description": "Root package file for Netlify deployment.",
+"description": "Root package file for Netlify deployment, including function dependencies.",
 "scripts": {
-"build": "echo 'No build command required for static site'"
+"build": "echo 'Netlify will automatically install dependencies and bundle functions'"
+},
+"dependencies": {
+"node-fetch": "^2.6.7"
 }
 }
