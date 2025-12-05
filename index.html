@@ -5,27 +5,205 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Art Studio: Critic, Prompt, & Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font family -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="notification" class="p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 opacity-0 transform translate-y-[-10px] text-white"></div>
+
+    <header class="bg-white shadow-md p-4 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-extrabold text-indigo-700 tracking-tight">
+                🎨 AI Art Studio
+            </h1>
+            <div class="text-sm text-gray-500 flex items-center space-x-2">
+                <span class="font-medium">User ID:</span>
+                <span id="user-id-display" class="user-id bg-gray-100 px-2 py-1 rounded-full text-xs font-mono select-all">Loading...</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-8 mt-6">
+        <!-- Tab Navigation -->
+        <div class="mb-8 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                <button onclick="switchTab('generator')" class="tab-button active group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-indigo-500 text-indigo-600 focus:outline-none">
+                    🖼️ Image Generator
+                </button>
+                <button onclick="switchTab('critique')" class="tab-button group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 focus:outline-none">
+                    🧐 Art Critic (Vision)
+                </button>
+                <button onclick="switchTab('prompter')" class="tab-button group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 focus:outline-none">
+                    📝 Prompt Enhancer
+                </button>
+            </nav>
+        </div>
+
+        <!-- Image Generator Tab -->
+        <div id="generator" class="tab-content active bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Image Generator (via Imagen)</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Generator Controls -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="generator-prompt" class="block text-sm font-medium text-gray-700 mb-2">Detailed Art Prompt</label>
+                        <textarea id="generator-prompt" rows="4" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="A breathtaking nebula in the shape of a wolf howling at a crescent moon, highly detailed, digital art, 8k resolution."></textarea>
+                    </div>
+                    
+                    <button id="generate-button" onclick="generateImage()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="generator-button-text">Generate Image</span>
+                        <div id="generator-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+                
+                <!-- Generator Output -->
+                <div class="bg-gray-50 p-4 rounded-xl shadow-inner">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Generated Art</h3>
+                    <div id="generator-output" class="aspect-square bg-gray-200 rounded-xl overflow-hidden flex items-center justify-center relative">
+                        <img id="generated-image" src="" alt="Generated Image" class="w-full h-full object-cover hidden transition-opacity duration-300">
+                        <p id="generator-placeholder" class="text-gray-500 p-4 text-center">Your generated image will appear here. The process can take up to 30 seconds.</p>
+                        <p id="generator-error" class="text-red-500 p-4 text-center hidden">Error generating image.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Art Critic Tab -->
+        <div id="critique" class="tab-content bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Art Critic (via Gemini Vision)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Critic Input -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="critique-prompt" class="block text-sm font-medium text-gray-700 mb-2">Critique Request</label>
+                        <textarea id="critique-prompt" rows="3" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="Give me a professional critique on this painting, focusing on composition and color use."></textarea>
+                    </div>
+
+                    <div>
+                        <label for="image-upload" class="block text-sm font-medium text-gray-700 mb-2">Upload Image (JPG/PNG)</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:border-indigo-500 transition duration-150 ease-in-out relative">
+                            <input id="image-upload" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'critique-preview', 'file-label')">
+                            <div class="space-y-1 text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <div class="flex text-sm text-gray-600">
+                                    <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                        <span id="file-label">Choose File</span>
+                                    </span>
+                                    <p class="pl-1">or drag and drop</p>
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    PNG, JPG up to 4MB
+                                </p>
+                            </div>
+                        </div>
+                        <img id="critique-preview" src="" alt="Image Preview" class="mt-4 max-h-64 w-auto rounded-xl shadow-lg hidden mx-auto">
+                    </div>
+                    
+                    <button id="critique-button" onclick="critiqueImage()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="critique-button-text">Get Critique</span>
+                        <div id="critique-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+
+                <!-- Critic Output -->
+                <div class="bg-gray-50 p-4 rounded-xl shadow-inner max-h-[600px] overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Critique Result</h3>
+                    <div id="critique-output" class="text-gray-700 text-sm leading-relaxed p-3 bg-white rounded-lg shadow-sm">
+                        <p class="text-gray-500">The professional analysis of your image will appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompt Enhancer Tab -->
+        <div id="prompter" class="tab-content bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Prompt Enhancer (via Gemini Text)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Prompter Input -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="prompter-input" class="block text-sm font-medium text-gray-700 mb-2">Short Idea / Simple Prompt</label>
+                        <textarea id="prompter-input" rows="4" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="A robot riding a bicycle in a field of sunflowers."></textarea>
+                    </div>
+                    
+                    <button id="prompter-button" onclick="enhancePrompt()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="prompter-button-text">Enhance Prompt</span>
+                        <div id="prompter-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+
+                <!-- Prompter Output -->
+                <div class="bg-gray-50 p-4 rounded-xl shadow-inner max-h-[400px] overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Enhanced Prompt Output</h3>
+                    <div id="prompter-output" class="text-gray-700 text-sm leading-relaxed p-3 bg-white rounded-lg shadow-sm">
+                        <p class="text-gray-500">Your simple idea will be transformed into a detailed, creative prompt here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // Set Firebase log level for debugging
+
+        // Set Firebase log level for production to reduce noise
         setLogLevel('error'); 
         
-        // --- GLOBAL VARIABLES (Provided by Canvas Environment) ---
-        // Note: These variables must be used for secure Firebase initialization.
+        // --- GLOBAL VARIABLES (Canvas Environment/Fallbacks) ---
+        // On Netlify, these will fall back to safe, non-functional defaults
+        // as we are not using Firestore in this final app.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        let auth, userId = null;
+        let auth, userId = 'N/A';
 
+        // Initialize Auth (Primarily for userId display, though Firestore isn't used)
         if (firebaseConfig) {
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             
-            // Function to handle Firebase Authentication
             const initializeAuth = async () => {
                 try {
                     if (initialAuthToken) {
@@ -33,15 +211,44 @@
                     } else {
                         await signInAnonymously(auth);
                     }
-                    userId = auth.currentUser?.uid || crypto.randomUUID();
-                    console.log("Firebase Auth Initialized. User ID:", userId);
-                    document.querySelectorAll('.user-id').forEach(el => el.textContent = userId);
+                    userId = auth.currentUser?.uid || 'anonymous-' + crypto.randomUUID().substring(0, 8);
+                    document.getElementById('user-id-display').textContent = userId;
                 } catch (error) {
                     console.error("Firebase authentication error:", error);
+                    document.getElementById('user-id-display').textContent = 'Auth Failed';
                 }
             };
             initializeAuth();
+        } else {
+             document.getElementById('user-id-display').textContent = 'N/A';
         }
+
+
+        // --- UI UTILITIES ---
+
+        /**
+         * Switches between the three main application tabs.
+         * @param {string} tabId The ID of the tab to activate ('generator', 'critique', 'prompter').
+         */
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('border-indigo-500', 'text-indigo-600');
+                button.classList.add('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+            });
+
+            const activeTab = document.querySelector(`.tab-button[onclick*="'${tabId}'"]`);
+            if (activeTab) {
+                activeTab.classList.add('border-indigo-500', 'text-indigo-600');
+                activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+            }
+        }
+
+        // Initialize the first tab on load
+        window.onload = () => switchTab('generator');
+
 
         /**
          * Converts a File object to a Base64 string for the Gemini API.
@@ -52,7 +259,6 @@
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => {
-                    // Extract only the Base64 data part (after the comma)
                     const base64Data = reader.result.split(',')[1];
                     resolve(base64Data);
                 };
@@ -84,36 +290,276 @@
                     .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-extrabold mt-8 mb-4 text-indigo-700">$1</h1>')
                     .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
                     .replace(/\*(.*)\*\*/gim, '<em>$1</em>')
-                    .replace(/^- (.*$)/gim, '<li>$1</li>')
-                    .replace(/\n\n/gim, '<p class="mt-2 mb-2">')
-                    .replace(/\n/gim, '<br>');
+                    .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>') // Add ml-4 for indentation
+                    .replace(/\n\n/gim, '</p><p class="mt-4 mb-2">'); // Treat double newline as paragraph break
                 
-                // Final cleanup for list items (simple approach)
-                html = html.replace(/<li>.*<\/li>/s, (match) => `<ul class="list-disc list-inside ml-4 space-y-1">${match}</ul>`);
+                // Wrap list items in a list container
+                html = html.replace(/(<li>.*<\/li>)+/s, (match) => `<ul class="list-disc list-inside ml-8 space-y-1">${match}</ul>`);
+                
+                // Ensure the start and end are wrapped in a paragraph tag if needed
+                if (!html.startsWith('<p')) html = '<p>' + html;
+                if (!html.endsWith('</p>')) html = html + '</p>';
+
                 return html;
             }
         };
 
         // Function to display image previews
-        function handleFileSelect(event, previewId, labelId) {
+        window.handleFileSelect = function(event, previewId, labelId) {
             const file = event.target.files[0];
             const preview = document.getElementById(previewId);
+            const label = document.getElementById(labelId);
 
             if (file) {
+                if (file.size > 4 * 1024 * 1024) { // 4MB limit
+                    showNotification("File size exceeds 4MB limit.", 'bg-red-500');
+                    event.target.value = ''; // Clear file input
+                    preview.classList.add('hidden');
+                    label.textContent = 'Choose File';
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
                     preview.classList.remove('hidden');
-                    document.getElementById(labelId).textContent = file.name;
+                    label.textContent = file.name;
                 }
                 reader.readAsDataURL(file);
             } else {
                 preview.src = '';
                 preview.classList.add('hidden');
-                document.getElementById(labelId).textContent = 'Choose File';
+                label.textContent = 'Choose File';
             }
         }
 
-        // --- UTILITY FUNCTIONS ---
+        // --- API & GENERATION FUNCTIONS ---
+
         /**
-         * Calls the local Netlify Function endpoint to
+         * Generic function to call the Netlify API Proxy.
+         * @param {string} modelName The model to call (e.g., 'gemini-2.5-flash-preview-09-2025').
+         * @param {object} apiPayload The structured payload for the Gemini/Imagen API.
+         * @returns {Promise<object>} The response data from the API.
+         */
+        async function callApiProxy(modelName, apiPayload) {
+            const endpoint = '/.netlify/functions/api-proxy';
+            const maxRetries = 3;
+            let lastError = null;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ modelName, apiPayload })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        lastError = data.error || data.details || `HTTP error! Status: ${response.status}`;
+                        throw new Error(lastError);
+                    }
+                    return data;
+
+                } catch (error) {
+                    lastError = error;
+                    console.error(`API Proxy attempt ${attempt + 1} failed:`, error);
+                    if (attempt < maxRetries - 1) {
+                        // Exponential backoff
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            // If all retries fail, throw the last error
+            throw new Error(`Failed to call API after ${maxRetries} attempts. Last error: ${lastError}`);
+        }
+        
+        // --- 1. IMAGE GENERATOR (IMAGEN) ---
+        window.generateImage = async function() {
+            const prompt = document.getElementById('generator-prompt').value.trim();
+            const outputDiv = document.getElementById('generator-output');
+            const imageElement = document.getElementById('generated-image');
+            const placeholder = document.getElementById('generator-placeholder');
+            const errorText = document.getElementById('generator-error');
+            const button = document.getElementById('generate-button');
+            const buttonText = document.getElementById('generator-button-text');
+            const spinner = document.getElementById('generator-spinner');
+
+            if (!prompt) {
+                showNotification("Please enter a prompt for the image generator.", 'bg-yellow-500');
+                return;
+            }
+
+            // Reset UI
+            imageElement.classList.add('hidden');
+            placeholder.textContent = 'Generating... This may take up to 30 seconds.';
+            placeholder.classList.remove('hidden');
+            errorText.classList.add('hidden');
+            
+            // Disable button and show spinner
+            button.disabled = true;
+            buttonText.textContent = 'Generating...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const apiPayload = {
+                    instances: { prompt: prompt },
+                    parameters: { sampleCount: 1 }
+                };
+                
+                // Use the recommended Imagen model for generation
+                const response = await callApiProxy('imagen-4.0-generate-001', apiPayload);
+
+                const base64Data = response.predictions?.[0]?.bytesBase64Encoded;
+
+                if (!base64Data) {
+                    throw new Error("Invalid response from Imagen API.");
+                }
+
+                // Display the image
+                const imageUrl = `data:image/png;base64,${base64Data}`;
+                imageElement.src = imageUrl;
+                imageElement.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                showNotification("Image generated successfully!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Image Generation Error:", error);
+                errorText.textContent = `Generation failed: ${error.message}`;
+                errorText.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                showNotification("Image generation failed. See console for details.", 'bg-red-500');
+            } finally {
+                // Re-enable button and hide spinner
+                button.disabled = false;
+                buttonText.textContent = 'Generate Image';
+                spinner.classList.add('hidden');
+            }
+        }
+        
+        // --- 2. ART CRITIC (GEMINI VISION) ---
+        window.critiqueImage = async function() {
+            const prompt = document.getElementById('critique-prompt').value.trim();
+            const fileInput = document.getElementById('image-upload');
+            const outputDiv = document.getElementById('critique-output');
+            const button = document.getElementById('critique-button');
+            const buttonText = document.getElementById('critique-button-text');
+            const spinner = document.getElementById('critique-spinner');
+
+            const file = fileInput.files[0];
+
+            if (!prompt || !file) {
+                showNotification("Please enter a critique request and upload an image.", 'bg-yellow-500');
+                return;
+            }
+
+            // Reset UI
+            outputDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Analyzing image...</span></div>';
+
+            // Disable button and show spinner
+            button.disabled = true;
+            buttonText.textContent = 'Analyzing...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const base64Data = await fileToBase64(file);
+
+                const model = 'gemini-2.5-flash-preview-09-2025';
+                const apiPayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: `System Instruction: Act as a world-class art critic. Provide a detailed, insightful critique based on the user's request. Focus on aesthetics, composition, and technical execution. Critique Request: ${prompt}` },
+                            {
+                                inlineData: {
+                                    mimeType: file.type,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }],
+                };
+                
+                const response = await callApiProxy(model, apiPayload);
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!generatedText) {
+                    throw new Error("Invalid or empty response from Gemini API.");
+                }
+                
+                // Display the parsed markdown result
+                outputDiv.innerHTML = marked.parse(generatedText);
+                showNotification("Critique generated successfully!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Critique Error:", error);
+                outputDiv.innerHTML = `<p class="text-red-500">Analysis failed: ${error.message}</p>`;
+                showNotification("Critique generation failed. See console for details.", 'bg-red-500');
+            } finally {
+                // Re-enable button and hide spinner
+                button.disabled = false;
+                buttonText.textContent = 'Get Critique';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        // --- 3. PROMPT ENHANCER (GEMINI TEXT) ---
+        window.enhancePrompt = async function() {
+            const inputPrompt = document.getElementById('prompter-input').value.trim();
+            const outputDiv = document.getElementById('prompter-output');
+            const button = document.getElementById('prompter-button');
+            const buttonText = document.getElementById('prompter-button-text');
+            const spinner = document.getElementById('prompter-spinner');
+
+            if (!inputPrompt) {
+                showNotification("Please enter a simple idea to enhance.", 'bg-yellow-500');
+                return;
+            }
+
+            // Reset UI
+            outputDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Enhancing prompt...</span></div>';
+
+            // Disable button and show spinner
+            button.disabled = true;
+            buttonText.textContent = 'Enhancing...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const model = 'gemini-2.5-flash-preview-09-2025';
+                const systemPrompt = "You are a creative AI prompt engineer. Your task is to take a simple, short idea and expand it into a highly detailed, evocative, and technical prompt suitable for modern AI image generators (like Midjourney or Imagen). The output must be a single, long paragraph focusing on visual details, style, lighting, and camera angle. DO NOT include any explanatory text, headings, or bullet points.";
+
+                const apiPayload = {
+                    contents: [{ parts: [{ text: `Simple Idea: ${inputPrompt}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] }
+                };
+                
+                const response = await callApiProxy(model, apiPayload);
+
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!generatedText) {
+                    throw new Error("Invalid or empty response from Gemini API.");
+                }
+
+                // Display the result
+                outputDiv.innerHTML = `<p class="whitespace-pre-wrap">${generatedText}</p>`;
+                showNotification("Prompt enhanced successfully!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Prompt Enhancer Error:", error);
+                outputDiv.innerHTML = `<p class="text-red-500">Enhancement failed: ${error.message}</p>`;
+                showNotification("Prompt enhancement failed. See console for details.", 'bg-red-500');
+            } finally {
+                // Re-enable button and hide spinner
+                button.disabled = false;
+                buttonText.textContent = 'Enhance Prompt';
+                spinner.classList.add('hidden');
+            }
+        }
+
+    </script>
+</body>
+</html>
