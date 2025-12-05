@@ -1,1 +1,5 @@
+[build]
+
+This line tells Netlify to look for all function code inside the 'netlify/functions' folder
+
 functions = "netlify/functions"
