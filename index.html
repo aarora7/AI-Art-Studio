@@ -90,7 +90,7 @@
                             <input id="image-upload-rep" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'rep-preview', 'rep-file-label')">
                             <div class="space-y-1 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                                 <div class="flex text-sm text-gray-600">
                                     <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
@@ -159,7 +159,7 @@
                             <input id="image-upload" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'critique-preview', 'file-label')">
                             <div class="space-y-1 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                                 <div class="flex text-sm text-gray-600">
                                     <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
@@ -386,6 +386,9 @@
                     const data = await response.json();
 
                     if (!response.ok) {
+                        // CRITICAL DEBUGGING LINE: Log the full response object for failed requests
+                        console.error(`API Proxy attempt ${attempt + 1}: Non-OK HTTP status (${response.status}) or Error in Response Body:`, data);
+
                         lastError = data.error || data.details || `HTTP error! Status: ${response.status}`;
                         throw new Error(lastError);
                     }
@@ -393,7 +396,8 @@
 
                 } catch (error) {
                     lastError = error;
-                    console.error(`API Proxy attempt ${attempt + 1} failed:`, error);
+                    // CRITICAL DEBUGGING LINE: Log the network/fetch error
+                    console.error(`API Proxy attempt ${attempt + 1} failed (Network/Fetch Error):`, error);
                     if (attempt < maxRetries - 1) {
                         // Exponential backoff
                         const delay = Math.pow(2, attempt) * 1000;
@@ -452,6 +456,7 @@
             // --- STEP 1: GENERATE STYLE PROMPT (Gemini Vision) ---
             buttonText.textContent = '1/3: Analyzing Style...';
             placeholder.textContent = 'Analyzing reference art to generate style prompt...';
+            console.log("Starting Step 1: Style Analysis.");
 
             let generatedStylePrompt = '';
             try {
@@ -480,10 +485,11 @@
                 stylePromptText.textContent = generatedStylePrompt;
                 stylePromptDisplay.classList.remove('hidden');
                 showNotification("Step 1 Complete: Style prompt generated.", 'bg-indigo-500');
+                console.log("Step 1 Complete. Generated Style Prompt:", generatedStylePrompt);
 
             } catch (error) {
-                console.error("Style Prompt Generation Error:", error);
-                showNotification("Step 1 Failed: Could not analyze image style.", 'bg-red-500');
+                console.error("Step 1 (Style Prompt Generation) Error:", error);
+                showNotification(`Step 1 Failed: Could not analyze image style. Details: ${error.message}`, 'bg-red-500');
                 // Exit workflow
                 button.disabled = false;
                 spinner.classList.add('hidden');
@@ -494,19 +500,29 @@
             buttonText.textContent = '2/3: Generating New Art...';
             placeholder.textContent = 'Generating new image by combining the style prompt and your subject...';
             
+            const finalPrompt = `${subject}, ${generatedStylePrompt}`;
+            console.log("Starting Step 2: Image Generation. Final Prompt:", finalPrompt);
+            
             try {
-                const finalPrompt = `${subject}, ${generatedStylePrompt}`;
-                
                 const imagePayload = {
                     instances: { prompt: finalPrompt },
                     parameters: { sampleCount: 1 }
                 };
                 
+                // IMPORTANT: The Netlify function must correctly route this to the 'predict' endpoint
                 const response = await callApiProxy('imagen-4.0-generate-001', imagePayload);
+                
+                // Enhanced check for errors in the response structure
+                if (response.error) {
+                     // If the proxy returns an error, throw it immediately
+                    throw new Error(response.error.message || JSON.stringify(response.error));
+                }
+
                 const base64Data = response.predictions?.[0]?.bytesBase64Encoded;
 
                 if (!base64Data) {
-                    throw new Error("Invalid response from Imagen API.");
+                    console.error("Imagen API Full Response (No Base64):", response);
+                    throw new Error("Invalid response from Imagen API (missing base64 data). Check console for full API error details.");
                 }
 
                 replicatedImageUrl = `data:image/png;base64,${base64Data}`;
@@ -514,10 +530,12 @@
                 imageElement.classList.remove('hidden');
                 placeholder.classList.add('hidden');
                 showNotification("Step 2 Complete: New image generated.", 'bg-indigo-500');
+                console.log("Step 2 Complete. Image successfully generated.");
 
             } catch (error) {
-                console.error("Image Generation Error:", error);
-                showNotification("Step 2 Failed: Image generation failed.", 'bg-red-500');
+                // This catch now handles network errors AND errors parsed from the response body
+                console.error("Step 2 (Image Generation) Error:", error);
+                showNotification(`Step 2 Failed: Image generation error. Details: ${error.message || error}`, 'bg-red-500');
                 // Exit workflow
                 button.disabled = false;
                 spinner.classList.add('hidden');
@@ -527,9 +545,12 @@
             // --- STEP 3: COMPARISON CRITIQUE (Gemini Vision) ---
             buttonText.textContent = '3/3: Writing Comparison...';
             critiqueOutput.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Writing comparison critique...</span></div>';
+            console.log("Starting Step 3: Comparison Critique.");
+
 
             try {
                 // Fetch the newly generated image data as base64 for the critique payload
+                // Use a dedicated function if possible, but for simplicity, we'll repeat the fetch logic
                 const fetchResponse = await fetch(replicatedImageUrl);
                 const blob = await fetchResponse.blob();
                 const replicatedBase64 = await new Promise(resolve => {
@@ -576,9 +597,10 @@
                 
                 critiqueOutput.innerHTML = marked.parse(critiqueText);
                 showNotification("Step 3 Complete: Comparison critique ready!", 'bg-green-500');
+                console.log("Step 3 Complete. Critique generated.");
 
             } catch (error) {
-                console.error("Critique Error:", error);
+                console.error("Step 3 (Critique) Error:", error);
                 critiqueOutput.innerHTML = `<p class="text-red-500">Step 3 Failed: Critique generation error. ${error.message}</p>`;
                 showNotification("Step 3 Failed: Critique generation error.", 'bg-red-500');
             } finally {
