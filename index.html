@@ -90,7 +90,7 @@
                             <input id="image-upload-rep" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'rep-preview', 'rep-file-label')">
                             <div class="space-y-1 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                                 <div class="flex text-sm text-gray-600">
                                     <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
@@ -159,7 +159,7 @@
                             <input id="image-upload" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'critique-preview', 'file-label')">
                             <div class="space-y-1 text-center">
                                 <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                                 <div class="flex text-sm text-gray-600">
                                     <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
@@ -375,11 +375,16 @@
             const maxRetries = 3;
             let lastError = null;
 
+            // CRITICAL DEBUGGING LOG: Log the payload just before sending it to the proxy
+            console.log(`[API CALL] Sending to proxy: Model=${modelName}, Payload=`, apiPayload);
+
+
             for (let attempt = 0; attempt < maxRetries; attempt++) {
                 try {
                     const response = await fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
+                        // The body sent to the proxy is { modelName, apiPayload }
                         body: JSON.stringify({ modelName, apiPayload })
                     });
 
@@ -389,7 +394,13 @@
                         // CRITICAL DEBUGGING LINE: Log the full response object for failed requests
                         console.error(`API Proxy attempt ${attempt + 1}: Non-OK HTTP status (${response.status}) or Error in Response Body:`, data);
 
-                        lastError = data.error || data.details || `HTTP error! Status: ${response.status}`;
+                        // Extract error message for logging and notification
+                        lastError = data.error?.message || data.details || `HTTP error! Status: ${response.status}`;
+                        // If it's a generic [object Object] error, keep the status code
+                        if (lastError.includes('[object Object]')) {
+                            lastError = `Received 400 Bad Request. Check Netlify function logs.`;
+                        }
+                        
                         throw new Error(lastError);
                     }
                     return data;
@@ -504,8 +515,9 @@
             console.log("Starting Step 2: Image Generation. Final Prompt:", finalPrompt);
             
             try {
+                // This is the correct payload structure for the Imagen 'predict' endpoint
                 const imagePayload = {
-                    instances: { prompt: finalPrompt },
+                    instances: [{ prompt: finalPrompt }], // Changed to array of instances to match most standard predict payloads
                     parameters: { sampleCount: 1 }
                 };
                 
@@ -535,7 +547,7 @@
             } catch (error) {
                 // This catch now handles network errors AND errors parsed from the response body
                 console.error("Step 2 (Image Generation) Error:", error);
-                showNotification(`Step 2 Failed: Image generation error. Details: ${error.message || error}`, 'bg-red-500');
+                showNotification(`Step 2 Failed: Image generation error. Check browser console and Netlify function logs.`, 'bg-red-500');
                 // Exit workflow
                 button.disabled = false;
                 spinner.classList.add('hidden');
