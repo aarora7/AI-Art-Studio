@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Art Studio: Critic, Prompt, & Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font family -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div id="notification" class="p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 opacity-0 transform translate-y-[-10px] text-white"></div>
+
+    <header class="bg-white shadow-md p-4 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-extrabold text-indigo-700 tracking-tight">
+                🎨 AI Art Studio
+            </h1>
+            <div class="text-sm text-gray-500 flex items-center space-x-2">
+                <span class="font-medium">User ID:</span>
+                <span id="user-id-display" class="user-id bg-gray-100 px-2 py-1 rounded-full text-xs font-mono select-all">Loading...</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-8 mt-6">
+        <!-- Tab Navigation -->
+        <div class="mb-8 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                <button onclick="switchTab('replication-workflow')" class="tab-button active group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-indigo-500 text-indigo-600 focus:outline-none">
+                    ✨ Style Replication Workflow
+                </button>
+                <button onclick="switchTab('critique')" class="tab-button group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 focus:outline-none">
+                    🧐 Art Critic (Vision)
+                </button>
+                <button onclick="switchTab('prompter')" class="tab-button group inline-flex items-center py-4 px-1 border-b-4 font-medium text-sm transition-colors duration-200 border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 focus:outline-none">
+                    📝 Prompt Enhancer
+                </button>
+            </nav>
+        </div>
+
+        <!-- Style Replication Workflow Tab (New Core Functionality) -->
+        <div id="replication-workflow" class="tab-content active bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Style Replication Workflow</h2>
+            <p class="text-gray-600 mb-6">Upload a reference image (e.g., a Miro painting). The AI will extract its style, generate a new image with your subject, and then critique the result.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- 1. Input/Upload Column -->
+                <div class="space-y-6">
+                    <h3 class="text-xl font-semibold text-indigo-600 border-b pb-2 mb-4">1. Reference Art Input</h3>
+                    <div>
+                        <label for="image-upload-rep" class="block text-sm font-medium text-gray-700 mb-2">Upload Style Image (e.g., Miro)</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:border-indigo-500 transition duration-150 ease-in-out relative">
+                            <input id="image-upload-rep" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'rep-preview', 'rep-file-label')">
+                            <div class="space-y-1 text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <div class="flex text-sm text-gray-600">
+                                    <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                        <span id="rep-file-label">Choose File</span>
+                                    </span>
+                                    <p class="pl-1">or drag and drop</p>
+                                </div>
+                                <p class="text-xs text-gray-500">PNG, JPG up to 4MB</p>
+                            </div>
+                        </div>
+                        <img id="rep-preview" src="" alt="Style Reference Preview" class="mt-4 max-h-64 w-auto rounded-xl shadow-lg hidden mx-auto">
+                    </div>
+
+                    <div>
+                        <label for="replication-subject" class="block text-sm font-medium text-gray-700 mb-2">New Subject Idea</label>
+                        <textarea id="replication-subject" rows="2" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="A futuristic spaceship landing on Mars."></textarea>
+                    </div>
+
+                    <button id="replication-button" onclick="runStyleReplication()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="replication-button-text">Start Replication Workflow</span>
+                        <div id="replication-spinner" class="spinner hidden !w-5 !h-5"></div>
+                    </button>
+                </div>
+                
+                <!-- 2. Generated Image Column -->
+                <div class="space-y-6">
+                    <h3 class="text-xl font-semibold text-indigo-600 border-b pb-2 mb-4">2. AI Generated Art</h3>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl shadow-inner">
+                        <p id="generated-style-prompt-display" class="text-sm text-gray-700 mb-3 p-2 bg-white rounded-lg shadow-sm hidden">
+                            <span class="font-bold text-indigo-500">Style Prompt:</span> <span id="style-prompt-text"></span>
+                        </p>
+                        <div id="replication-output" class="aspect-square bg-gray-200 rounded-xl overflow-hidden flex items-center justify-center relative">
+                            <img id="replicated-image" src="" alt="Replicated Image" class="w-full h-full object-cover hidden transition-opacity duration-300">
+                            <p id="replication-placeholder" class="text-gray-500 p-4 text-center">Step 2: New image in the reference style will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Critique Column -->
+                <div class="space-y-6">
+                    <h3 class="text-xl font-semibold text-indigo-600 border-b pb-2 mb-4">3. Comparison Critique</h3>
+                    <div class="bg-gray-50 p-4 rounded-xl shadow-inner max-h-[700px] overflow-y-auto">
+                        <div id="replication-critique-output" class="text-gray-700 text-sm leading-relaxed p-3 bg-white rounded-lg shadow-sm">
+                            <p class="text-gray-500">Step 3: A professional comparison between the original art and the AI version will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Art Critic Tab (Existing functionality) -->
+        <div id="critique" class="tab-content bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Art Critic (via Gemini Vision)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Critic Input -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="critique-prompt" class="block text-sm font-medium text-gray-700 mb-2">Critique Request</label>
+                        <textarea id="critique-prompt" rows="3" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="Give me a professional critique on this painting, focusing on composition and color use."></textarea>
+                    </div>
+
+                    <div>
+                        <label for="image-upload" class="block text-sm font-medium text-gray-700 mb-2">Upload Image (JPG/PNG)</label>
+                        <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer hover:border-indigo-500 transition duration-150 ease-in-out relative">
+                            <input id="image-upload" type="file" accept="image/jpeg, image/png" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileSelect(event, 'critique-preview', 'file-label')">
+                            <div class="space-y-1 text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                    <path d="M28 8H10a2 2 0 00-2 2v28a2 2 0 002 2h28a2 2 0 002-2V20M12 30h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m-8-4h8m16-4v-8h8m-4 0v-4h-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                                <div class="flex text-sm text-gray-600">
+                                    <span class="relative bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                        <span id="file-label">Choose File</span>
+                                    </span>
+                                    <p class="pl-1">or drag and drop</p>
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    PNG, JPG up to 4MB
+                                </p>
+                            </div>
+                        </div>
+                        <img id="critique-preview" src="" alt="Image Preview" class="mt-4 max-h-64 w-auto rounded-xl shadow-lg hidden mx-auto">
+                    </div>
+                    
+                    <button id="critique-button" onclick="critiqueImage()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="critique-button-text">Get Critique</span>
+                        <div id="critique-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+
+                <!-- Critic Output -->
+                <div class="bg-gray-50 p-4 rounded-xl shadow-inner max-h-[600px] overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Critique Result</h3>
+                    <div id="critique-output" class="text-gray-700 text-sm leading-relaxed p-3 bg-white rounded-lg shadow-sm">
+                        <p class="text-gray-500">The professional analysis of your image will appear here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompt Enhancer Tab (Existing functionality) -->
+        <div id="prompter" class="tab-content bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Prompt Enhancer (via Gemini Text)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Prompter Input -->
+                <div class="space-y-6">
+                    <div>
+                        <label for="prompter-input" class="block text-sm font-medium text-gray-700 mb-2">Short Idea / Simple Prompt</label>
+                        <textarea id="prompter-input" rows="4" class="w-full p-3 border border-gray-300 rounded-xl focus:ring-indigo-500 focus:border-indigo-500 resize-none" placeholder="A robot riding a bicycle in a field of sunflowers."></textarea>
+                    </div>
+                    
+                    <button id="prompter-button" onclick="enhancePrompt()" class="w-full flex items-center justify-center space-x-3 px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                        <span id="prompter-button-text">Enhance Prompt</span>
+                        <div id="prompter-spinner" class="spinner hidden"></div>
+                    </button>
+                </div>
+
+                <!-- Prompter Output -->
+                <div class="bg-gray-50 p-4 rounded-xl shadow-inner max-h-[400px] overflow-y-auto">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Enhanced Prompt Output</h3>
+                    <div id="prompter-output" class="text-gray-700 text-sm leading-relaxed p-3 bg-white rounded-lg shadow-sm">
+                        <p class="text-gray-500">Your simple idea will be transformed into a detailed, creative prompt here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Set Firebase log level for production to reduce noise
+        setLogLevel('error'); 
+        
+        // --- GLOBAL VARIABLES (Canvas Environment/Fallbacks) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let auth, userId = 'N/A';
+
+        // Initialize Auth (Primarily for userId display)
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            
+            const initializeAuth = async () => {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    userId = auth.currentUser?.uid || 'anonymous-' + crypto.randomUUID().substring(0, 8);
+                    document.getElementById('user-id-display').textContent = userId;
+                } catch (error) {
+                    console.error("Firebase authentication error:", error);
+                    document.getElementById('user-id-display').textContent = 'Auth Failed';
+                }
+            };
+            initializeAuth();
+        } else {
+             document.getElementById('user-id-display').textContent = 'N/A';
+        }
+
+
+        // --- UI UTILITIES ---
+
+        /**
+         * Switches between the three main application tabs.
+         * @param {string} tabId The ID of the tab to activate ('replication-workflow', 'critique', 'prompter').
+         */
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('border-indigo-500', 'text-indigo-600');
+                button.classList.add('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+            });
+
+            const activeTab = document.querySelector(`.tab-button[onclick*="'${tabId}'"]`);
+            if (activeTab) {
+                activeTab.classList.add('border-indigo-500', 'text-indigo-600');
+                activeTab.classList.remove('border-transparent', 'text-gray-500', 'hover:border-gray-300', 'hover:text-gray-700');
+            }
+        }
+
+        // Initialize the first tab on load
+        window.onload = () => switchTab('replication-workflow');
+
+
+        /**
+         * Converts a File object to a Base64 string for the Gemini API.
+         * @param {File} file The file object to convert.
+         * @returns {Promise<string>} The Base64 data string.
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64Data = reader.result.split(',')[1];
+                    resolve(base64Data);
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
+        }
+
+        /**
+         * Displays a temporary notification message on the screen.
+         * @param {string} message The message to display.
+         * @param {string} type Tailwind classes for color (e.g., 'bg-red-500').
+         */
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 ${type}`;
+            setTimeout(() => {
+                notification.className = 'p-3 rounded-xl shadow-lg fixed top-4 right-4 z-50 transition-all duration-300 opacity-0 transform translate-y-[-10px]';
+            }, 5000);
+        }
+
+        // Simple Markdown parser for displaying the result nicely
+        const marked = {
+            parse: (markdown) => {
+                let html = markdown
+                    .replace(/^### (.*$)/gim, '<h3 class="text-xl font-bold mt-4 mb-2 text-indigo-600">$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-gray-800">$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-extrabold mt-8 mb-4 text-indigo-700">$1</h1>')
+                    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*)\*\*/gim, '<em>$1</em>')
+                    .replace(/^- (.*$)/gim, '<li class="ml-4">$1</li>') 
+                    .replace(/\n\n/gim, '</p><p class="mt-4 mb-2">'); 
+                
+                html = html.replace(/(<li>.*<\/li>)+/s, (match) => `<ul class="list-disc list-inside ml-8 space-y-1">${match}</ul>`);
+                
+                if (!html.startsWith('<p')) html = '<p>' + html;
+                if (!html.endsWith('</p>')) html = html + '</p>';
+
+                return html;
+            }
+        };
+
+        // Function to display image previews
+        window.handleFileSelect = function(event, previewId, labelId) {
+            const file = event.target.files[0];
+            const preview = document.getElementById(previewId);
+            const label = document.getElementById(labelId);
+
+            if (file) {
+                if (file.size > 4 * 1024 * 1024) { // 4MB limit
+                    showNotification("File size exceeds 4MB limit.", 'bg-red-500');
+                    event.target.value = ''; // Clear file input
+                    preview.classList.add('hidden');
+                    label.textContent = 'Choose File';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    label.textContent = file.name;
+                }
+                reader.readAsDataURL(file);
+            } else {
+                preview.src = '';
+                preview.classList.add('hidden');
+                label.textContent = 'Choose File';
+            }
+        }
+
+        // --- API & GENERATION FUNCTIONS ---
+
+        /**
+         * Generic function to call the Netlify API Proxy.
+         */
+        async function callApiProxy(modelName, apiPayload) {
+            const endpoint = '/.netlify/functions/api-proxy';
+            const maxRetries = 3;
+            let lastError = null;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ modelName, apiPayload })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        lastError = data.error || data.details || `HTTP error! Status: ${response.status}`;
+                        throw new Error(lastError);
+                    }
+                    return data;
+
+                } catch (error) {
+                    lastError = error;
+                    console.error(`API Proxy attempt ${attempt + 1} failed:`, error);
+                    if (attempt < maxRetries - 1) {
+                        // Exponential backoff
+                        const delay = Math.pow(2, attempt) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            throw new Error(`Failed to call API after ${maxRetries} attempts. Last error: ${lastError}`);
+        }
+        
+        // --- CORE STYLE REPLICATION WORKFLOW (STEP 1-3) ---
+        window.runStyleReplication = async function() {
+            const fileInput = document.getElementById('image-upload-rep');
+            const subject = document.getElementById('replication-subject').value.trim();
+            const originalImageFile = fileInput.files[0];
+            
+            const button = document.getElementById('replication-button');
+            const buttonText = document.getElementById('replication-button-text');
+            const spinner = document.getElementById('replication-spinner');
+
+            const stylePromptDisplay = document.getElementById('generated-style-prompt-display');
+            const stylePromptText = document.getElementById('style-prompt-text');
+            const imageElement = document.getElementById('replicated-image');
+            const placeholder = document.getElementById('replication-placeholder');
+            const critiqueOutput = document.getElementById('replication-critique-output');
+            
+            // --- Validation and Reset ---
+            if (!originalImageFile || !subject) {
+                showNotification("Please upload a style image and enter a new subject.", 'bg-yellow-500');
+                return;
+            }
+
+            // Reset UI
+            imageElement.classList.add('hidden');
+            stylePromptDisplay.classList.add('hidden');
+            critiqueOutput.innerHTML = `<p class="text-gray-500">Step 3: A professional comparison between the original art and the AI version will appear here.</p>`;
+            placeholder.classList.remove('hidden');
+            
+            button.disabled = true;
+            spinner.classList.remove('hidden');
+            
+            let originalImageBase64;
+            let replicatedImageUrl = '';
+
+            try {
+                originalImageBase64 = await fileToBase64(originalImageFile);
+            } catch(e) {
+                showNotification("Error reading image file.", 'bg-red-500');
+                button.disabled = false;
+                spinner.classList.add('hidden');
+                return;
+            }
+
+
+            // --- STEP 1: GENERATE STYLE PROMPT (Gemini Vision) ---
+            buttonText.textContent = '1/3: Analyzing Style...';
+            placeholder.textContent = 'Analyzing reference art to generate style prompt...';
+
+            let generatedStylePrompt = '';
+            try {
+                const promptPayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: `System Instruction: You are an expert AI prompt engineer. Analyze the attached artwork and generate a single, highly descriptive, technical prompt that captures the style, composition, color palette, and texture. Do not include a subject. The output MUST be just the prompt text suitable for an image generation model. Example: "In the style of Van Gogh, thick impasto brushstrokes, vibrant swirling colors, dramatic light, expressionist oil on canvas."` },
+                            {
+                                inlineData: {
+                                    mimeType: originalImageFile.type,
+                                    data: originalImageBase64
+                                }
+                            }
+                        ]
+                    }],
+                };
+                
+                const response = await callApiProxy('gemini-2.5-flash-preview-09-2025', promptPayload);
+                generatedStylePrompt = response.candidates?.[0]?.content?.parts?.[0]?.text.trim() || '';
+
+                if (!generatedStylePrompt) {
+                    throw new Error("Failed to extract a style prompt from the image.");
+                }
+
+                stylePromptText.textContent = generatedStylePrompt;
+                stylePromptDisplay.classList.remove('hidden');
+                showNotification("Step 1 Complete: Style prompt generated.", 'bg-indigo-500');
+
+            } catch (error) {
+                console.error("Style Prompt Generation Error:", error);
+                showNotification("Step 1 Failed: Could not analyze image style.", 'bg-red-500');
+                // Exit workflow
+                button.disabled = false;
+                spinner.classList.add('hidden');
+                return;
+            }
+
+            // --- STEP 2: GENERATE NEW IMAGE (Imagen) ---
+            buttonText.textContent = '2/3: Generating New Art...';
+            placeholder.textContent = 'Generating new image by combining the style prompt and your subject...';
+            
+            try {
+                const finalPrompt = `${subject}, ${generatedStylePrompt}`;
+                
+                const imagePayload = {
+                    instances: { prompt: finalPrompt },
+                    parameters: { sampleCount: 1 }
+                };
+                
+                const response = await callApiProxy('imagen-4.0-generate-001', imagePayload);
+                const base64Data = response.predictions?.[0]?.bytesBase64Encoded;
+
+                if (!base64Data) {
+                    throw new Error("Invalid response from Imagen API.");
+                }
+
+                replicatedImageUrl = `data:image/png;base64,${base64Data}`;
+                imageElement.src = replicatedImageUrl;
+                imageElement.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                showNotification("Step 2 Complete: New image generated.", 'bg-indigo-500');
+
+            } catch (error) {
+                console.error("Image Generation Error:", error);
+                showNotification("Step 2 Failed: Image generation failed.", 'bg-red-500');
+                // Exit workflow
+                button.disabled = false;
+                spinner.classList.add('hidden');
+                return;
+            }
+
+            // --- STEP 3: COMPARISON CRITIQUE (Gemini Vision) ---
+            buttonText.textContent = '3/3: Writing Comparison...';
+            critiqueOutput.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Writing comparison critique...</span></div>';
+
+            try {
+                // Fetch the newly generated image data as base64 for the critique payload
+                const fetchResponse = await fetch(replicatedImageUrl);
+                const blob = await fetchResponse.blob();
+                const replicatedBase64 = await new Promise(resolve => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(blob);
+                });
+
+                const critiquePrompt = `Critique the fidelity of the generated AI image (Image 2) to the style of the original human-made artwork (Image 1). 
+                                        Specifically, discuss:
+                                        1. The success of the style transfer (colors, texture, composition elements).
+                                        2. The artistic merit of the new AI piece.
+                                        3. Conclude with a comparison of the two pieces.`;
+
+                const critiquePayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: "Image 1: Original Style Reference" },
+                            {
+                                inlineData: {
+                                    mimeType: originalImageFile.type,
+                                    data: originalImageBase64
+                                }
+                            },
+                            { text: "Image 2: AI Generated Art" },
+                            {
+                                inlineData: {
+                                    mimeType: 'image/png', // Use png for the generated output
+                                    data: replicatedBase64
+                                }
+                            },
+                            { text: critiquePrompt }
+                        ]
+                    }],
+                };
+                
+                const response = await callApiProxy('gemini-2.5-flash-preview-09-2025', critiquePayload);
+                const critiqueText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!critiqueText) {
+                    throw new Error("Invalid or empty response from Critique API.");
+                }
+                
+                critiqueOutput.innerHTML = marked.parse(critiqueText);
+                showNotification("Step 3 Complete: Comparison critique ready!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Critique Error:", error);
+                critiqueOutput.innerHTML = `<p class="text-red-500">Step 3 Failed: Critique generation error. ${error.message}</p>`;
+                showNotification("Step 3 Failed: Critique generation error.", 'bg-red-500');
+            } finally {
+                // --- Final Cleanup ---
+                button.disabled = false;
+                buttonText.textContent = 'Start Replication Workflow';
+                spinner.classList.add('hidden');
+            }
+        }
+        
+        // --- EXISTING UTILITY FUNCTIONS (Kept for other tabs) ---
+
+        window.critiqueImage = async function() {
+            const prompt = document.getElementById('critique-prompt').value.trim();
+            const fileInput = document.getElementById('image-upload');
+            const outputDiv = document.getElementById('critique-output');
+            const button = document.getElementById('critique-button');
+            const buttonText = document.getElementById('critique-button-text');
+            const spinner = document.getElementById('critique-spinner');
+
+            const file = fileInput.files[0];
+
+            if (!prompt || !file) {
+                showNotification("Please enter a critique request and upload an image.", 'bg-yellow-500');
+                return;
+            }
+
+            outputDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Analyzing image...</span></div>';
+            button.disabled = true;
+            buttonText.textContent = 'Analyzing...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const base64Data = await fileToBase64(file);
+
+                const model = 'gemini-2.5-flash-preview-09-2025';
+                const apiPayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: `System Instruction: Act as a world-class art critic. Provide a detailed, insightful critique based on the user's request. Focus on aesthetics, composition, and technical execution. Critique Request: ${prompt}` },
+                            {
+                                inlineData: {
+                                    mimeType: file.type,
+                                    data: base64Data
+                                }
+                            }
+                        ]
+                    }],
+                };
+                
+                const response = await callApiProxy(model, apiPayload);
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!generatedText) {
+                    throw new Error("Invalid or empty response from Gemini API.");
+                }
+                
+                outputDiv.innerHTML = marked.parse(generatedText);
+                showNotification("Critique generated successfully!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Critique Error:", error);
+                outputDiv.innerHTML = `<p class="text-red-500">Analysis failed: ${error.message}</p>`;
+                showNotification("Critique generation failed. See console for details.", 'bg-red-500');
+            } finally {
+                button.disabled = false;
+                buttonText.textContent = 'Get Critique';
+                spinner.classList.add('hidden');
+            }
+        }
+
+        window.enhancePrompt = async function() {
+            const inputPrompt = document.getElementById('prompter-input').value.trim();
+            const outputDiv = document.getElementById('prompter-output');
+            const button = document.getElementById('prompter-button');
+            const buttonText = document.getElementById('prompter-button-text');
+            const spinner = document.getElementById('prompter-spinner');
+
+            if (!inputPrompt) {
+                showNotification("Please enter a simple idea to enhance.", 'bg-yellow-500');
+                return;
+            }
+
+            outputDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="spinner !w-4 !h-4"></div><span class="text-indigo-600">Enhancing prompt...</span></div>';
+            button.disabled = true;
+            buttonText.textContent = 'Enhancing...';
+            spinner.classList.remove('hidden');
+
+            try {
+                const model = 'gemini-2.5-flash-preview-09-2025';
+                const systemPrompt = "You are a creative AI prompt engineer. Your task is to take a simple, short idea and expand it into a highly detailed, evocative, and technical prompt suitable for modern AI image generators (like Midjourney or Imagen). The output must be a single, long paragraph focusing on visual details, style, lighting, and camera angle. DO NOT include any explanatory text, headings, or bullet points.";
+
+                const apiPayload = {
+                    contents: [{ parts: [{ text: `Simple Idea: ${inputPrompt}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] }
+                };
+                
+                const response = await callApiProxy(model, apiPayload);
+                const generatedText = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!generatedText) {
+                    throw new Error("Invalid or empty response from Gemini API.");
+                }
+
+                outputDiv.innerHTML = `<p class="whitespace-pre-wrap">${generatedText}</p>`;
+                showNotification("Prompt enhanced successfully!", 'bg-green-500');
+
+            } catch (error) {
+                console.error("Prompt Enhancer Error:", error);
+                outputDiv.innerHTML = `<p class="text-red-500">Enhancement failed: ${error.message}</p>`;
+                showNotification("Prompt enhancement failed. See console for details.", 'bg-red-500');
+            } finally {
+                button.disabled = false;
+                buttonText.textContent = 'Enhance Prompt';
+                spinner.classList.add('hidden');
+            }
+        }
+
+    </script>
+</body>
+</html>
